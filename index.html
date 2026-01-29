@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generador de Inventario - Completo</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Iconos -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- SheetJS -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    /* Estilos de la tabla */
+    .table-container {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      padding: 20px;
+      overflow: hidden;
+    }
+    
+    .table thead { background: #343a40; color: white; }
+    .table th { font-weight: 500; font-size: 0.85rem; vertical-align: middle; white-space: nowrap; }
+    .table td { font-size: 0.85rem; vertical-align: middle; padding: 0.5rem 0.5rem; }
+
+    /* Imágenes pequeñas */
+    .avatar-sm { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .prod-img-sm { width: 35px; height: auto; border-radius: 4px; }
+
+    /* Truncar URLs */
+    .text-truncate-custom {
+      max-width: 100px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: middle;
+      color: #0d6efd;
+      text-decoration: none;
+    }
+    .text-truncate-custom:hover { text-decoration: underline; }
+
+    /* Botones y controles */
+    .btn-excel { background-color: #198754; color: white; transition: all 0.3s; }
+    .btn-excel:hover { background-color: #146c43; color: white; transform: translateY(-1px); }
+    .pagination-container { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+<div class="container py-5">
+  
+  <div class="table-container mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h3 class="m-0 text-dark"><i class="bi bi-box-seam-fill me-2"></i>Generador de Inventario</h3>
+      <span class="badge bg-primary">Vista Completa</span>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-bold text-muted small">Fecha Inicio</label>
+        <input type="date" id="fechaInicio" class="form-control form-control-sm" value="2025-01-01">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold text-muted small">Fecha Fin</label>
+        <input type="date" id="fechaFin" class="form-control form-control-sm" value="2025-12-31">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold text-muted small">Reg/Día</label>
+        <input type="text" id="registrosDia" class="form-control form-control-sm" value="1-5" placeholder="Ej: 1-5">
+      </div>
+      <div class="col-md-4 d-flex gap-2 align-items-end">
+        <button class="btn btn-primary btn-sm w-50 fw-bold" onclick="generarInventario()">
+          <i class="bi bi-play-circle me-1"></i> Generar
+        </button>
+        <button class="btn btn-excel btn-sm w-50 fw-bold" onclick="descargarExcelConLinks()">
+          <i class="bi bi-folder-symlink me-1"></i> Guardar Excel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" id="miTabla">
+        <thead class="table-dark text-center">
+          <tr>
+            <th>Fecha</th>
+            <th>Región</th>
+            <th class="text-start">Encargado</th>
+            <th>URL Enc</th>
+            <th class="text-start">Categoría</th>
+            <th class="text-start">Producto</th>
+            <th>URL Prod</th>
+            <th>Entradas</th>
+            <th>Salidas</th>
+            <th>Stock</th>
+          </tr>
+        </thead>
+        <tbody id="tablaBody">
+          <tr><td colspan="10" class="text-center text-muted py-4">Presiona "Generar" para ver los datos</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination-container" id="paginacion" style="display:none;">
+      <button class="btn btn-outline-secondary btn-sm" onclick="cambiarPagina(-1)" id="btnPrev">
+        <i class="bi bi-chevron-left"></i> Anterior
+      </button>
+      <span class="text-muted small fw-bold" id="infoPagina">Página 1 de 1</span>
+      <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina(1)" id="btnNext">
+        Siguiente <i class="bi bi-chevron-right"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// === DATOS ===
+const regiones = ["Norte", "Sur", "Este", "Oeste"];
+const encargadosPorRegion = {
+  Norte: { nombre: "Carlos Méndez", foto: "https://raw.githubusercontent.com/JUANCITOPENA/GENERADOR_IMAGENES_PERSONAS/refs/heads/main/FOTOS_PERSONAS_UBER_MAS/mpersona_9.png" },
+  Sur: { nombre: "Ana Rodríguez", foto: "https://raw.githubusercontent.com/JUANCITOPENA/GENERADOR_IMAGENES_PERSONAS/refs/heads/main/FOTOS_PERSONAS_UBER_MAS/fpersona_1.png" },
+  Este: { nombre: "Luis Pérez", foto: "https://raw.githubusercontent.com/JUANCITOPENA/GENERADOR_IMAGENES_PERSONAS/refs/heads/main/FOTOS_PERSONAS_UBER_MAS/mpersona_6.png" },
+  Oeste: { nombre: "María Gómez", foto: "https://raw.githubusercontent.com/JUANCITOPENA/GENERADOR_IMAGENES_PERSONAS/refs/heads/main/FOTOS_PERSONAS_UBER_MAS/fpersona_10.png" }
+};
+const categorias = ["Camisetas", "Pantalones", "Camisas", "Chaquetas", "Vestidos", "Faldas", "Abrigos", "Jeans"];
+const productos = {
+  "Camiseta Básica": "https://acrearpublicidad.com/wp-content/uploads/2020/08/camisa-oxford-dama.png",
+  "Vestido Formal": "https://png.pngtree.com/png-vector/20260120/ourmid/pngtree-red-formal-dress-mockup-styled-elegantly-for-fashion-presentation-png-image_18510586.webp",
+  "Falda Plisada": "https://elmachetazo.vtexassets.com/arquivos/ids/728925/Falda-Escolar-Azul-Secundaria%7CPlisada%7CTalla-8_1.png",
+  "Abrigo Invierno": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTdUnDssPWRRtW_zFOmfoGwYpi9k-CSeYRHHw&s",
+  "Pantalón Chino": "https://uniformesroger.com/WebRoot/Store/Shops/UniformesRoger/671D/2E33/C751/BC89/9B86/2E10/8536/374A/1041421536.png",
+  "Suéter Lana": "https://i.pinimg.com/originals/8c/bd/e3/8cbde3656a91317bd96a801d8afca9ee.png",
+  "Chaqueta Cuero": "https://dainese-cdn.thron.com/delivery/public/image/dainese/793b39d8-3f77-47af-b1b1-5341df963231/px6qct/std/960x960/201533877_001_1.png",
+  "Falda Lápiz": "https://media.balmain.com/image/upload/f_auto,q_auto,dpr_auto,e_sharpen:85/c_fill,w_432,h_584/sfcc/balmain/hi-res/FF1LBA97CF690FKF?_i=AG",
+  "Camisa Oxford": "https://camisasferruche.com/wp-content/uploads/2022/08/CAMISA-OXFORD-VERDE-ML.png",
+  "Blusa Manga Larga": "https://handlergroup.com/cdn/shop/products/SunD3_4PNaranja-1_650x.png",
+  "Jean Slim Fit": "https://jeanpool.com.au/cdn/shop/files/557B4296-4787-4CEE-898F-D4579E5F5597.png",
+  "Chaqueta Denim": "https://png.pngtree.com/png-vector/20240824/ourmid/pngtree-denim-jacket-isolated-for-man-wear-png-image_13603828.png",
+  "Suéter Algodón": "https://assets.theplace.com/image/upload/t_plp_img_m,f_auto,q_auto/v1/ecom/assets/products/tcp/3057022/3057022_1206.png",
+  "Vestido Casual": "https://cdnx.jumpseller.com/kadrihel1/image/5627848/resize/635/635?1646060241",
+  "Blusa Sin Mangas": "https://www.thorsteinar-outlet.de/media/6c/0e/dd/1748339570/1_10116.png"
+};
+
+// === VARIABLES ===
+let datosPorMes = {};       
+let registrosVisuales = []; 
+let paginaActual = 1;
+const registrosPorPagina = 7; 
+
+function generarInventario() {
+  datosPorMes = {}; 
+  registrosVisuales = [];
+  
+  const inicio = new Date(document.getElementById("fechaInicio").value + 'T00:00:00');
+  const fin = new Date(document.getElementById("fechaFin").value + 'T00:00:00');
+  const regInput = document.getElementById("registrosDia").value;
+  let [minReg, maxReg] = regInput.includes("-") ? regInput.split("-").map(Number) : [parseInt(regInput), parseInt(regInput)];
+
+  for (let fecha = new Date(inicio); fecha <= fin; fecha.setDate(fecha.getDate() + 1)) {
+    const iteraciones = Math.floor(Math.random() * (maxReg - minReg + 1)) + minReg;
+    const mesKey = `${fecha.getFullYear()}_${(fecha.getMonth() + 1).toString().padStart(2, '0')}`;
+    
+    if (!datosPorMes[mesKey]) datosPorMes[mesKey] = [];
+
+    for (let i = 0; i < iteraciones; i++) {
+      const region = regiones[Math.floor(Math.random() * regiones.length)];
+      const encargadoObj = encargadosPorRegion[region];
+      const categoria = categorias[Math.floor(Math.random() * categorias.length)];
+      const productoNombre = Object.keys(productos)[Math.floor(Math.random() * Object.keys(productos).length)];
+      const productoUrl = productos[productoNombre];
+      const ent = Math.floor(Math.random() * 200) + 20;
+      const sal = Math.floor(Math.random() * (ent - 5)) + 5;
+      const fStr = fecha.toISOString().split("T")[0];
+
+      const registro = {
+        Fecha: fStr, 
+        Region: region, 
+        Encargado: encargadoObj.nombre,
+        "URL Encargado": encargadoObj.foto,
+        Categoria: categoria, 
+        Producto: productoNombre,
+        "URL Producto": productoUrl,
+        Entradas: ent, 
+        Salidas: sal, 
+        Stock: ent - sal
+      };
+
+      datosPorMes[mesKey].push(registro);
+      registrosVisuales.push(registro);
+    }
+  }
+
+  paginaActual = 1;
+  renderizarTabla();
+}
+
+function renderizarTabla() {
+  const tbody = document.getElementById("tablaBody");
+  const pagDiv = document.getElementById("paginacion");
+  
+  if (registrosVisuales.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-3">No se generaron registros.</td></tr>';
+    pagDiv.style.display = "none";
+    return;
+  }
+
+  const indiceInicio = (paginaActual - 1) * registrosPorPagina;
+  const indiceFin = indiceInicio + registrosPorPagina;
+  const registrosPagina = registrosVisuales.slice(indiceInicio, indiceFin);
+
+  let html = "";
+  registrosPagina.forEach(reg => {
+    html += `
+      <tr>
+        <td class="text-center font-monospace small">${reg.Fecha}</td>
+        <td class="text-center"><span class="badge bg-light text-dark border">${reg.Region}</span></td>
+        <td>
+          <div class="d-flex align-items-center">
+            <img src="${reg["URL Encargado"]}" class="avatar-sm me-2">
+            <span class="small fw-bold">${reg.Encargado}</span>
+          </div>
+        </td>
+        <td class="text-center">
+          <a href="${reg["URL Encargado"]}" target="_blank" class="text-truncate-custom" title="${reg["URL Encargado"]}">
+            LINK
+          </a>
+        </td>
+        <td><small>${reg.Categoria}</small></td>
+        <td>
+          <div class="d-flex align-items-center">
+            <img src="${reg["URL Producto"]}" class="prod-img-sm me-2">
+            <span class="small fw-bold text-dark">${reg.Producto}</span>
+          </div>
+        </td>
+        <td class="text-center">
+          <a href="${reg["URL Producto"]}" target="_blank" class="text-truncate-custom" title="${reg["URL Producto"]}">
+            LINK
+          </a>
+        </td>
+        <!-- AQUÍ ESTÁN LOS CAMPOS QUE FALTABAN -->
+        <td class="text-center text-primary fw-bold">${reg.Entradas}</td>
+        <td class="text-center text-danger fw-bold">${reg.Salidas}</td>
+        <td class="text-center fw-bold text-success border-start bg-light">${reg.Stock}</td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+  pagDiv.style.display = "flex";
+  actualizarControles();
+}
+
+function actualizarControles() {
+  const totalPaginas = Math.ceil(registrosVisuales.length / registrosPorPagina);
+  document.getElementById("infoPagina").textContent = `Página ${paginaActual} de ${totalPaginas} (${registrosVisuales.length} regs)`;
+  document.getElementById("btnPrev").disabled = (paginaActual === 1);
+  document.getElementById("btnNext").disabled = (paginaActual === totalPaginas);
+}
+
+function cambiarPagina(delta) {
+  const totalPaginas = Math.ceil(registrosVisuales.length / registrosPorPagina);
+  const nuevaPagina = paginaActual + delta;
+
+  if (nuevaPagina >= 1 && nuevaPagina <= totalPaginas) {
+    paginaActual = nuevaPagina;
+    renderizarTabla();
+  }
+}
+
+async function descargarExcelConLinks() {
+  const llaves = Object.keys(datosPorMes);
+  if (llaves.length === 0) return alert("⚠️ Genera los datos primero.");
+
+  if ('showDirectoryPicker' in window) {
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      let contador = 0;
+      for (const mes of llaves) {
+        const ws = XLSX.utils.json_to_sheet(datosPorMes[mes]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+        
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const nombreArchivo = `Inventario_${mes}.xlsx`;
+        const fileHandle = await dirHandle.getFileHandle(nombreArchivo, { create: true });
+        
+        const writable = await fileHandle.createWritable();
+        await writable.write(wbout);
+        await writable.close();
+        contador++;
+      }
+      alert(`✅ Se guardaron ${contador} archivos correctamente.`);
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error(err);
+    }
+  } else {
+    if (!confirm(`Se descargarán ${llaves.length} archivos en Descargas. ¿Seguir?`)) return;
+    for (const mes of llaves) {
+      const ws = XLSX.utils.json_to_sheet(datosPorMes[mes]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+      XLSX.writeFile(wb, `Inventario_${mes}.xlsx`);
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+}
+</script>
+
+</body>
+</html>
